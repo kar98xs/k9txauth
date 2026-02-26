@@ -1,116 +1,113 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useAuthStore } from "./stores/authStore";
-import { initializeCSRF } from "./services/api";
-import Login from "./pages/Login.jsx";
-import Register from "./pages/Register.jsx";
-import VerifyEmail from "./pages/VerifyEmail.jsx";
-import ForgotPassword from "./pages/ForgotPassword.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
 import "./index.css";
 
+// Lazy load pages for better performance and code splitting
+const Login = lazy(() => import("./pages/Login.jsx"));
+const Register = lazy(() => import("./pages/Register.jsx"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail.jsx"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+const NotFound = lazy(() => import("./pages/NotFound.jsx"));
+
+// Loading component for Suspense fallback
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  );
+}
+
+// Optimized ProtectedRoute with cleaner logic
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // If not authenticated, go to login
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
-
-  // If authenticated but not verified, go to verify email
-  if (isAuthenticated && user && !user.is_verified) {
+  if (isLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (!user?.is_verified)
     return <Navigate to="/verify-email" state={{ email: user.email }} />;
-  }
 
   return children;
 }
 
+// Optimized PublicRoute with cleaner logic
 function PublicRoute({ children }) {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingScreen />;
+  if (isAuthenticated && user?.is_verified) return <Navigate to="/dashboard" />;
 
-  // Only redirect to dashboard if authenticated AND verified
-  const shouldRedirect = isAuthenticated && user?.is_verified;
-
-  return !shouldRedirect ? children : <Navigate to="/dashboard" />;
+  return children;
 }
 
 function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
+  const logout = useAuthStore((state) => state.logout);
 
-  // Initialize CSRF Token on App Load
   useEffect(() => {
-    initializeCSRF().catch(() => {
-      // Silently handle - CSRF will be initialized on first authenticated request
-    });
-  }, []);
-
-  // Handle Auth Initialization
-  useEffect(() => {
-    // Always try to initialize auth to check if user has valid cookies
+    // Initialize auth on mount
     initializeAuth();
-  }, [initializeAuth]);
+
+    // Security: Listen for auth logout events from interceptor
+    const handleAuthLogout = () => {
+      logout();
+      window.location.href = "/login";
+    };
+
+    window.addEventListener("auth:logout", handleAuthLogout);
+
+    return () => {
+      window.removeEventListener("auth:logout", handleAuthLogout);
+    };
+  }, [initializeAuth, logout]);
 
   return (
     <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Toaster position="top-right" />
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PublicRoute>
-              <Register />
-            </PublicRoute>
-          }
-        />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route
-          path="/forgot-password"
-          element={
-            <PublicRoute>
-              <ForgotPassword />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            }
+          />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicRoute>
+                <ForgotPassword />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
