@@ -1,8 +1,17 @@
 import { useAuthStore } from "../stores/authStore";
 import { useNavigate } from "react-router-dom";
+import MFASettings from "../components/MFASettings";
+import {
+  LogOut,
+  Link2,
+  BarChart3,
+  FileText,
+  Shield,
+  Calendar,
+} from "lucide-react";
 
 function Dashboard() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -10,107 +19,87 @@ function Dashboard() {
     navigate("/login");
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Welcome to Your Dashboard
-          </h1>
-          <p className="text-gray-600">You have successfully authenticated!</p>
-        </div>
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "numeric",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
 
-        {/* User Avatar */}
-        <div className="flex justify-center mb-6">
-          {user?.profile_picture ? (
-            <img
-              src={user.profile_picture}
-              alt={user.username}
-              referrerPolicy="no-referrer"
-              className="w-32 h-32 rounded-full shadow-lg object-cover border-4 border-indigo-500"
-              onError={(e) => {
-                console.error(
-                  "Failed to load profile picture:",
-                  user.profile_picture
-                );
-                e.target.style.display = "none";
-              }}
-            />
-          ) : (
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold">
               {user?.username?.charAt(0).toUpperCase()}
             </div>
-          )}
-        </div>
-
-        {/* User Information */}
-        <div className="space-y-4 mb-8">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <label className="text-sm font-semibold text-gray-600 block mb-1">
-              Username
-            </label>
-            <p className="text-lg text-gray-800">{user?.username}</p>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-4">
-            <label className="text-sm font-semibold text-gray-600 block mb-1">
-              Email
-            </label>
-            <p className="text-lg text-gray-800">{user?.email}</p>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-4">
-            <label className="text-sm font-semibold text-gray-600 block mb-1">
-              Full Name
-            </label>
-            <p className="text-lg text-gray-800">
-              {user?.first_name && user?.last_name
-                ? `${user.first_name} ${user.last_name}`
-                : "Not provided"}
-            </p>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-4">
-            <label className="text-sm font-semibold text-gray-600 block mb-1">
-              Account Status
-            </label>
-            <div className="flex items-center gap-2">
-              {user?.is_verified ? (
-                <>
-                  <span className="inline-block w-3 h-3 bg-green-500 rounded-full"></span>
-                  <span className="text-lg text-green-600 font-semibold">
-                    Verified
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="inline-block w-3 h-3 bg-yellow-500 rounded-full"></span>
-                  <span className="text-lg text-yellow-600 font-semibold">
-                    Pending Verification
-                  </span>
-                </>
-              )}
+            <div>
+              <h1 className="text-2xl font-bold">Welcome, {user?.username}!</h1>
+              <p className="text-gray-400 text-sm flex items-center gap-1">
+                <Calendar className="w-4 h-4" />
+                Member since {formatDate(user?.created_at)}
+              </p>
             </div>
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-4">
           <button
             onClick={handleLogout}
-            className="w-full bg-red-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-red-700 transition-colors shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-red-600/10 text-red-500 border border-red-600/30 rounded-lg hover:bg-red-600/20 transition-colors"
           >
+            <LogOut className="w-4 h-4" />
             Logout
           </button>
         </div>
 
-        {/* Footer Info */}
-        <div className="mt-8 pt-6 border-t border-gray-200 text-center">
-          <p className="text-sm text-gray-500">
-            Member since {new Date(user?.created_at).toLocaleDateString()}
-          </p>
+        {/* Account Information */}
+        <div className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 mb-6">
+          <div className="flex items-center gap-2 mb-6">
+            <Shield className="w-5 h-5 text-blue-500" />
+            <h2 className="text-lg font-semibold">Account Information</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="text-sm text-gray-400 flex items-center gap-1 mb-2">
+                Username
+              </label>
+              <p className="text-white font-medium">{user?.username}</p>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 flex items-center gap-1 mb-2">
+                Email
+              </label>
+              <p className="text-white font-medium truncate">{user?.email}</p>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 flex items-center gap-1 mb-2">
+                Full Name
+              </label>
+              <p className="text-white font-medium">
+                {user?.first_name && user?.last_name
+                  ? `${user.first_name} ${user.last_name}`
+                  : "dont reply"}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 flex items-center gap-1 mb-2">
+                Status
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                <span className="text-green-500 font-medium">Verified</span>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* MFA Settings */}
+        <MFASettings user={user} onUpdate={updateUser} />
       </div>
     </div>
   );
