@@ -86,6 +86,14 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Silently handle 401 errors for initial auth check
+    if (
+      error.response?.status === 401 &&
+      originalRequest.url?.includes("/auth/me/")
+    ) {
+      return Promise.reject({ ...error, silent: true });
+    }
+
     // Public endpoints that don't require token refresh
     const publicEndpoints = [
       "/auth/login/",
