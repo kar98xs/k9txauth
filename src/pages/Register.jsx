@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
+import { useGoogleOneTap } from "../hooks/useGoogleOneTap";
 import toast from "react-hot-toast";
 import { MessageSquare, Info, Check, X, Eye, EyeOff } from "lucide-react";
 
 export default function Register() {
+  // Enable Google One Tap auto-popup for registration
+  useGoogleOneTap({ disabled: false, context: "signup" });
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -72,8 +75,8 @@ export default function Register() {
     }
 
     setIsLoading(true);
-
     const result = await register(formData);
+    setIsLoading(false);
 
     if (result.success) {
       const message =
@@ -84,38 +87,38 @@ export default function Register() {
         state: { email: formData.email },
         replace: true,
       });
-    } else {
-      const errors = result.error;
-      let errorMsg = "Registration failed. Please try again.";
-
-      if (typeof errors === "object") {
-        errorMsg = Object.values(errors)
-          .map((err) => (Array.isArray(err) ? err[0] : err))
-          .join(", ");
-        Object.values(errors).forEach((err) => {
-          toast.error(Array.isArray(err) ? err[0] : err);
-        });
-      } else {
-        errorMsg = errors;
-        toast.error(errors);
-
-        // If error mentions account exists, suggest going to verify page
-        if (
-          errorMsg.toLowerCase().includes("already exists") ||
-          errorMsg.toLowerCase().includes("account exists")
-        ) {
-          setTimeout(() => {
-            navigate("/verify-email", {
-              state: { email: formData.email },
-              replace: true,
-            });
-          }, 2000);
-        }
-      }
-      setError(errorMsg);
+      return;
     }
 
-    setIsLoading(false);
+    // Handle registration errors
+    const errors = result.error;
+    let errorMsg = "Registration failed. Please try again.";
+
+    if (typeof errors === "object") {
+      errorMsg = Object.values(errors)
+        .map((err) => (Array.isArray(err) ? err[0] : err))
+        .join(", ");
+      Object.values(errors).forEach((err) => {
+        toast.error(Array.isArray(err) ? err[0] : err);
+      });
+    } else {
+      errorMsg = errors;
+      toast.error(errors);
+
+      // Redirect to verify page if account already exists
+      if (
+        errorMsg.toLowerCase().includes("already exists") ||
+        errorMsg.toLowerCase().includes("account exists")
+      ) {
+        setTimeout(() => {
+          navigate("/verify-email", {
+            state: { email: formData.email },
+            replace: true,
+          });
+        }, 2000);
+      }
+    }
+    setError(errorMsg);
   };
 
   return (
@@ -254,8 +257,8 @@ export default function Register() {
                           passwordStrength === "strong"
                             ? "w-full bg-green-500"
                             : passwordStrength === "medium"
-                            ? "w-2/3 bg-yellow-500"
-                            : "w-1/3 bg-red-500"
+                              ? "w-2/3 bg-yellow-500"
+                              : "w-1/3 bg-red-500"
                         }`}
                       />
                     </div>
@@ -264,8 +267,8 @@ export default function Register() {
                         passwordStrength === "strong"
                           ? "text-green-500"
                           : passwordStrength === "medium"
-                          ? "text-yellow-500"
-                          : "text-red-500"
+                            ? "text-yellow-500"
+                            : "text-red-500"
                       }`}
                     >
                       {passwordStrength}
