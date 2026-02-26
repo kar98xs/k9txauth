@@ -3,38 +3,77 @@ import { Link, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuthStore } from "../stores/authStore";
 import { authAPI, getErrorMessage } from "../services/api";
+import { useGoogleOneTap } from "../hooks/useGoogleOneTap";
 import toast from "react-hot-toast";
 import { MessageSquare, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
+  // Enable Google One Tap auto-popup
+  useGoogleOneTap({ disabled: false, context: "signin" });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
   const { login, setUser, setIsAuthenticated } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    e.stopPropagation();
-
     if (isLoading) return;
 
     setIsLoading(true);
     setError("");
 
-    try {
-      const result = await login({ email, password });
+    const result = await login({ email, password });
+    setIsLoading(false);
 
-      if (result && result.success) {
-        toast.success("Welcome back!");
-        setTimeout(() => navigate("/dashboard"), 100);
-      } else {
-        const errorMsg = result?.error || "Login failed. Please try again.";
-        setError(errorMsg);
-        toast.error(errorMsg);
-      }
+    if (!result) {
+      const msg = "No response from server";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    // MFA required - show MFA input
+    if (result.mfa_required) {
+      setMfaRequired(true);
+      return;
+    }
+
+    // Login successful
+    if (result.success) {
+      toast.success("Welcome back!");
+      setTimeout(() => navigate("/dashboard"), 100);
+      return;
+    }
+
+    // Login failed
+    if (result.error) {
+      setError(result.error);
+      toast.error(result.error);
+    }
+  };
+
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await authAPI.mfaVerifyLogin({
+        email,
+        mfa_code: mfaCode,
+      });
+
+      const { user } = response.data;
+      setUser(user);
+      setIsAuthenticated(true);
+
+      toast.success("Login successful!");
+      navigate("/dashboard");
     } catch (err) {
       const errorMsg = getErrorMessage(err);
       setError(errorMsg);
@@ -45,14 +84,13 @@ export default function Login() {
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
+    setIsLoading(true);
+    setError("");
+
     try {
-      setIsLoading(true);
       const response = await authAPI.googleLogin(credentialResponse.credential);
-
-      const { user } = response.data;
-      setUser(user);
+      setUser(response.data.user);
       setIsAuthenticated(true);
-
       toast.success("Google login successful!");
       navigate("/dashboard");
     } catch (error) {
@@ -91,138 +129,228 @@ export default function Login() {
             <h1 className="text-4xl font-bold gradient-text mb-2">
               SecureAuth
             </h1>
-            <p className="text-dark-text-secondary">Sign in to your account</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Error Message */}
-            {error && (
-              <div className="bg-brand-error/10 border border-brand-error/30 text-brand-error px-4 py-3 rounded-lg text-sm backdrop-blur-sm animate-slide-down">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-dark-text mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="Enter your email"
-                required
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium text-dark-text">
-                  Password
-                </label>
-                <Link
-                  to="/forgot-password"
-                  className="text-sm text-brand-primary hover:text-brand-primary-hover transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input pr-10"
-                  placeholder="Enter your password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-text-secondary hover:text-dark-text transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="animate-spin h-5 w-5 mr-2"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Signing in...
-                </span>
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
-
-          {/* Google Sign-In */}
-          <div className="mt-6">
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-dark-border"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-3 bg-dark-card text-dark-text-secondary">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div className="w-full flex justify-center">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="filled_black"
-                size="large"
-                text="continue_with"
-                shape="rectangular"
-                useOneTap={false}
-              />
-            </div>
-          </div>
-
-          <div className="mt-6 text-center">
-            <p className="text-dark-text-secondary text-sm">
-              Don't have an account?{" "}
-              <Link
-                to="/register"
-                className="text-brand-primary hover:text-brand-primary-hover font-medium transition-colors"
-              >
-                Create Account
-              </Link>
+            <p className="text-dark-text-secondary">
+              {mfaRequired ? "Enter MFA Code" : "Sign in to your account"}
             </p>
           </div>
+
+          {/* MFA Code Form */}
+          {mfaRequired ? (
+            <form onSubmit={handleMfaSubmit} className="space-y-6">
+              {error && (
+                <div className="bg-brand-error/10 border border-brand-error/30 text-brand-error px-4 py-3 rounded-lg text-sm backdrop-blur-sm animate-slide-down">
+                  {error}
+                </div>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-blue-800 text-center">
+                  Open Google Authenticator app and enter the 6-digit code
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-dark-text mb-2">
+                  MFA Code
+                </label>
+                <input
+                  type="text"
+                  value={mfaCode}
+                  onChange={(e) =>
+                    setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  className="input text-center text-2xl tracking-widest"
+                  placeholder="000000"
+                  maxLength={6}
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-dark-text-secondary mt-2 text-center">
+                  Enter the 6-digit code from Google Authenticator
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || mfaCode.length !== 6}
+                className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin h-5 w-5 mr-2"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Verifying...
+                  </span>
+                ) : (
+                  "Verify & Sign In"
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMfaRequired(false);
+                  setMfaCode("");
+                  setError("");
+                }}
+                className="w-full text-sm text-dark-text-secondary hover:text-dark-text transition-colors"
+              >
+                ← Back to login
+              </button>
+            </form>
+          ) : (
+            /* Regular Login Form */
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Error Message */}
+              {error && (
+                <div className="bg-brand-error/10 border border-brand-error/30 text-brand-error px-4 py-3 rounded-lg text-sm backdrop-blur-sm animate-slide-down">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-dark-text mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input"
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-dark-text">
+                    Password
+                  </label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm text-brand-primary hover:text-brand-primary-hover transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input pr-10"
+                    placeholder="Enter your password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-text-secondary hover:text-dark-text transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin h-5 w-5 mr-2"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Signing in...
+                  </span>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Google Sign-In - Only show when not in MFA mode */}
+          {!mfaRequired && (
+            <>
+              <div className="mt-6">
+                <div className="relative mb-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-dark-border"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-3 bg-dark-card text-dark-text-secondary">
+                      Or continue with
+                    </span>
+                  </div>
+                </div>
+
+                <div className="w-full flex justify-center">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="filled_black"
+                    size="large"
+                    text="continue_with"
+                    shape="rectangular"
+                    useOneTap={false}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 text-center">
+                <p className="text-dark-text-secondary text-sm">
+                  Don't have an account?{" "}
+                  <Link
+                    to="/register"
+                    className="text-brand-primary hover:text-brand-primary-hover font-medium transition-colors"
+                  >
+                    Create Account
+                  </Link>
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
