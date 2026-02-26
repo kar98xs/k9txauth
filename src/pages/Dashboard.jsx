@@ -1,6 +1,6 @@
 import { useAuthStore } from "../stores/authStore";
 import { useNavigate } from "react-router-dom";
-import MFASettings from "../components/MFASettings";
+import MFASettings from "../Components/MFASettings";
 import {
   LogOut,
   Link2,
@@ -106,3 +106,4 @@ function Dashboard() {
 }
 
 export default Dashboard;
+
